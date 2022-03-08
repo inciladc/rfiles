@@ -1,0 +1,437 @@
+---
+title: "Heart_Disease Prediction Report"
+author: "Dodgecarl Incila"
+date: "3/8/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libs, eval=TRUE, message=FALSE,error=FALSE, warning=FALSE}
+#for installation of these packages, please see the R file together of this report
+library(caret)
+library(tidyverse)
+library(data.table)
+library(dplyr)
+```
+
+```{r}
+setwd("C:/Users/ll/Desktop/DATA SCIENCE/Finals/Heart")
+```
+
+
+## INTRODUCTION
+
+
+Heart disease refers to any condition affecting the heart. There are many types, some of which are preventable.
+
+According to the Centers for Disease Control and Prevention (CDC), heart disease is the leading cause of death in the United States.
+
+With the use of R and Rstudio, we will perform Exploratory Analysis (EDA) involving  the heart disease data to further understand the nature and statistics of the disease and through Machine Learning modeling, we aim to predict a diagnosis of heart disease based on the available data in this report.
+
+
+## THE DATA
+
+
+Main: 
+https://www.kaggle.com/cherngs/heart-disease-cleveland-uci
+
+Download for report:
+https://raw.githubusercontent.com/inciladc/rfiles/main/heart101.csv
+
+**Background of the Data**
+
+I acknowledge the following for providing such data to work on:
+
+Creators:
+Hungarian Institute of Cardiology. Budapest: Andras Janosi, M.D.
+University Hospital, Zurich, Switzerland: William Steinbr
+Creators:
+Hungarian Institute of Cardiology. Budapest: Andras Janosi, M.D.
+University Hospital, Zurich, Switzerland: William Steinbrunn, M.D.
+University Hospital, Basel, Switzerland: Matthias Pfisterer, M.D.
+V.A. Medical Center, Long Beach and Cleveland Clinic Foundation: Robert Detrano, M.D., Ph.D.
+Donor: David W. Aha (aha '@' ics.uci.edu) (714) 856-8779
+
+
+**Data Retrieval**
+
+Retrieving Data from Github repo:
+```{r}
+dat <- read.csv("https://raw.githubusercontent.com/inciladc/rfiles/main/heart101.csv")
+```
+
+**Inspect Raw Data**
+
+```{r}
+#inspect raw data
+str(dat)
+```
+Our Heart Disease raw data consist of 297 rows and 14 variables. 
+
+**Attributes of the Variables**
+
+1.) age: age in years
+
+2.) sex: sex (1 = male; 0 = female)
+
+3.) cp: chest pain type
+-- Value 0: typical angina
+-- Value 1: atypical angina
+-- Value 2: non-anginal pain
+-- Value 3: asymptomatic
+
+4.) trestbps: resting blood pressure (in mm Hg on admission to the hospital)
+
+5.) chol: serum cholestoral in mg/dl
+
+6.) fbs: (fasting blood sugar > 120 mg/dl) (1 = true; 0 = false)
+
+7.) restecg: resting electrocardiographic results
+-- Value 0: normal
+-- Value 1: having ST-T wave abnormality (T wave inversions and/or ST elevation or depression of > 0.05 mV)
+-- Value 2: showing probable or definite left ventricular hypertrophy by Estes' criteria
+
+8.) thalach: maximum heart rate achieved
+
+9.) exang: exercise induced angina (1 = yes; 0 = no)
+
+10.) oldpeak = ST depression induced by exercise relative to rest
+
+11.) slope: the slope of the peak exercise ST segment
+-- Value 0: upsloping
+-- Value 1: flat
+-- Value 2: downsloping
+
+12.) ca: number of major vessels (0-3) colored by flourosopy
+
+13.) thal: 0 = normal; 1 = fixed defect; 2 = reversable defect
+and the label
+
+14.) condition: 0 = no disease, 1 = disease
+
+
+## EXPLORING THE DATA
+
+Let us now examine what the data tells us upon preliminary observation.
+```{r}
+#store main dat object to dat_exp for exploration purposes
+dat_exp <- dat
+```
+
+**Age Distribution**
+
+```{r, fig.width=5, echo=FALSE}
+#show age distribution 
+hist(dat_exp$age)
+
+#Number of observations
+nrow(dat_exp)
+
+#Average age in ALL
+mean(dat_exp$age)
+
+#min/max age
+min(dat_exp$age)
+max(dat_exp$age)
+
+```
+We have 297 observed data points with age distribution centering at 54.54yo. The youngest at 29yo and oldest at 77yo.
+
+
+
+**Gender Distribution**
+
+```{r, echo=FALSE, fig.width=5, echo=FALSE}
+#change binary to character for visual purposes
+dat_exp$sex[dat_exp$sex==0] <- "female"
+dat_exp$sex[dat_exp$sex==1] <- "male"
+
+#figure of sex
+dat_exp %>% 
+  ggplot(aes(sex, fill=sex)) + 
+  geom_bar() + 
+  ggtitle("Distribution by Biological Gender")
+
+#male/female in numbers
+dat_exp %>% summarise(Total=length(sex),
+                          Male=sum(sex=="male"), 
+                          Female=sum(sex=="female"),
+                          Difference=Male-Female)
+
+```
+We have a total of 297 observations of which majority are males at 201 and females at 96. We have more males then females by 105 difference.
+
+**Age, Gender and Heart Disease**
+
+Let us examine how Age and Gender affects Heart Disease
+```{r, echo=FALSE, warning=FALSE, error=FALSE}
+#additional library for visual comparison
+library(cowplot)
+```
+
+```{r, echo=FALSE}
+#Plotting the comparison
+age1 <- dat_exp %>% ggplot(aes(sex,age, color=sex)) + geom_boxplot()+ ggtitle("Age and Sex Distribution in ALL")
+age2 <- dat_exp %>% filter(condition==1) %>% ggplot(aes(sex,age, color=sex)) + geom_boxplot() + ggtitle("With Heart Disease")
+
+plot_grid(age1,age2, labels = "AUTO")
+```
+In our data set, there are more males who have heart disease then females. Males tend to develop the disease at younger age then females. This could be due to the fact that there are more males than females in our data set.  
+
+```{r, echo=FALSE}
+#Male sex with Heart Disease
+dat_exp %>%filter(sex=="male") %>% summarise(Total_Male=length(sex),
+          with_disease=sum(condition==1),
+          percent_male=with_disease/Total_Male*100)
+
+#Female sex with Heart Disease
+dat_exp %>%filter(sex=="female") %>% summarise(Total_Female=length(sex),
+          with_disease=sum(condition==1),
+          percent_female=with_disease/Total_Female*100)
+
+#Average age in ALL
+dat_exp %>% summarise(Average_age_in_all=mean(age))
+#Average age with Heart Disease
+dat_exp %>% filter(condition==1) %>% summarise(Age_avg_withheartdisease=mean(age))
+         
+
+```
+However the numbers tell us, while there are more male in our data set percentage shows that 55% of males have the disease and 26% on females. Hence males still have more heart disease than females.
+
+On age in all, data suggest that heart disease show on average of 56.76 years old. 
+
+## FURTHER INVESTIGATION
+
+Gender and Age is innate in all of us. But why others have the heart disease and others don't have? Let us examine underlying reasons, based on the data we have, what relationship there is into developing a Heart Disease and see if we can use them as a predictors in building our prediction model for the disease. 
+
+```{r, echo=FALSE}
+#additional libraries
+library(ggcorrplot)
+library(ggplot2)
+```
+
+
+**Correlation of Features**
+
+Correlation is a statistical term describing the degree to which two variables move in coordination with one another. If the two variables move in the same direction, then those variables are said to have a positive correlation. If they move in opposite directions, then they have a negative correlation.
+
+```{r, echo=FALSE}
+#compute correlation
+cor_dat <- round(cor(dat),2)
+cor_dat
+#Visualize output
+ggcorrplot(cor_dat, hc.order = TRUE, type = "lower", lab = FALSE, title = "Correlation Matrix on Heart Disease features")
+```
+Right off the bat we see which among the variables we can use that lean towards positive correlation for "condition" which is our goal in building the predictive model. oldpeak, slope, cp, thal and exang are leaning more towards the positive,Corr 1, for Condition. 
+
+**Predictors for the Model**
+
+Now that we are able to see the relationship between variable to our target, condition, let us create a new object that stored data for modeling
+
+```{r}
+#store predictors on object mod_dat 
+mod_dat <- dat[,c(3,9,10,11,13,14)]
+
+#examine structure of mod_dat
+str(mod_dat)
+```
+From 13 variables (minus condition as this is our expected output) from the original data set, we now only have 5 variables based on the correlation leaning towards the positive for "condition"
+
+
+## BUILDING THE MODEL USING LINEAR REGRESSION
+
+Linear regression is one of the most commonly used predictive modelling techniques.It is represented by an equation Y = a + bX + e, where a is the intercept, b is the slope of the line and e is the error term. This equation can be used to predict the value of a target variable based on given predictor variable(s)
+
+As required in capstone we will use Linear Regression,and see if it is suitable or not in modeling for our heart disease prediction.
+
+**Linearity of Features**
+
+Let us check the linearity of our features before we start.
+```{r}
+pairs(mod_dat[1:6])
+```
+We could really not see any linearity amongst the features of the data.
+
+Linear regression may not be a suitable for classification output. However let us see what we can learn in running regression.
+
+**Running regression**
+```{r}
+#run regression
+result <- lm(condition~cp+exang+oldpeak+slope+thal, data = mod_dat)
+
+#view summary
+summary(result)
+```
+cp and thal prove to be most significant among the features based on the P-values.
+
+**Improved Model**
+
+This time we will run regression using cp and thal only.
+```{r}
+#we will use cp and thal only for this regression
+imp <- lm(condition~cp+thal,data = mod_dat)
+```
+
+**ANOVA test**
+```{r}
+anova(result,imp)
+```
+
+
+**Prediction**
+
+
+We will use our improved model to run prediction for heart disease where,
+
+
+cp: chest pain type
+-- Value 0: typical angina
+-- Value 1: atypical angina
+-- Value 2: non-anginal pain
+-- Value 3: asymptomatic
+
+thal: 0 = normal; 1 = fixed defect; 2 = reversible defect
+
+```{r}
+#cp values = 0,1,2,3
+#thal values = 0,1,2
+#Scenario 1: typical angina, normal thal
+predict(imp,data.frame(cp=0,thal=0))
+
+#Scenario 2: non-anginal pain, normal thal
+predict(imp,data.frame(cp=1,thal=0))
+
+#Scenario 3: asymptomatic, fixed defect
+predict(imp,data.frame(cp=3,thal=1))
+```
+
+
+
+
+## BUILDING THE MODEL USING RANDOM FOREST
+
+For our prediction model, we will be using RANDOM FOREST. Random Forest is a popular machine learning algorithm that belongs to the supervised learning technique. It can be used for both Classification and Regression problems in Machine Learning.
+
+**Preparation**
+Make sure that randomForest is installed and the library is run in your rstudio
+```{r,warning=FALSE, error=FALSE, message=FALSE}
+#Install randomforest package if not yet installed
+#If giving you an error, update your randomForest package and run rfNews() and re run library
+#install.packages("randomForest")
+library(randomForest)
+library(caret)
+```
+
+
+**Data to use for RF model**
+
+We will be using the mod_dat object used in the previous sections. We already filtered down to the most correlated to "condition" which is our desired ouput.
+
+```{r}
+#check data structure
+str(mod_dat)
+```
+
+```{r}
+#set seed for reproducibility
+set.seed(222)
+```
+
+**Data Partition**
+ 
+ For training and testing the model, will create train and test sets from the mod_dat data set:
+```{r}
+#store mod_dat to dp for partition
+dp <- mod_dat
+
+#set condition as a factor
+dp$condition <- as.factor(dp$condition)
+
+#set particion at 70/30 for train and test respectively
+ind <- sample(2, nrow(dp), replac=T, prob = c(0.7,0.3))
+rf_train <- dp[ind==1,]
+rf_test <- dp[ind==2,]
+
+#See structures of train and test set
+str(rf_train)
+
+str(rf_test)
+```
+We have 214 obs on train set and 83 obs on test set.
+
+
+**Run RF on Train set**
+
+```{r}
+#Run RF on train set
+rf <- randomForest(condition~cp+thal+exang+oldpeak+slope, data = rf_train)
+print(rf) 
+```
+
+**Predict using RF model**
+```{r}
+#predict
+p1 <- predict(rf,rf_train)
+
+#see confusion matrix
+confusionMatrix(p1, rf_train$condition, positive = "1")
+```
+
+
+**Apply on test set**
+
+```{r}
+p2 <- predict(rf,rf_test)
+confusionMatrix(p2,rf_test$condition,positive = "1")
+```
+
+## RESULTS
+
+**Linear Model**
+
+Using cp and thal as predictors on our final model
+
+| Scenario             | Condition (1)|
+|---------------------------|---------|
+| (1) cp = 0 thal = 0  | -0.05681502  |
+| (2) cp = 1 thal = 0  |  0.09377201  |
+| (3) cp = 3 thal = 1  |  0.6261871   |
+
+Looking at the results, our 3rd scenario, based on the given parameters show to be more closer to be diagnosed of heart disease at 0.62 vs scenario 1 which shows a negative value with parameters cp=0,thal=0
+
+Is this related to Heart Disease? I am not sure as I am not in the medical field and I cannot picture out what cp or thal is. However base on the prediction outputs, Scenario 3 may have a worse heart condition than the other two data wise, Hence, if I were to advise this person on scenario 3 to be careful with his heart health and have a follow up with his doctor.
+
+**Random Forest Model**
+
+| RF Model testing    | Accuracy  | Sensitivity | Specificity |
+|---------------------|-----------|-------------|-------------|
+| P1 on Training Set  |  0.9336   | 0.8925      | 0.9661      |
+| P2 on Testing Set   |  0.686    | 0.6136      | 0.7619      |
+
+Our RF model using all predictors on training set shows high accuracy and acceptable Sensitivity and specificity. Our goal for the heart disease prediction is to determine a "positive" prediction of the disease hence sensitivity of detecting (True Positive) is important. 
+
+Applying our model on the two data sets, shows different values on Sensitivity. Even Accuracy is impacted greatly. While we have good numbers in our Training set, but Our goal to have a model that is Sensitive enough to detect Condition = 1, needs to be improved at 61% in the training set.
+
+**Limitation**
+One of the limitation I would highlight in this report is the number of observations available. With only 297 data points to work on, we have not maximized the ability of Random Forest. Also, Resources such as acceptable computing machine used and learning curve of the vast knowledge there is in data science. 
+        
+
+## CONCLUSION
+
+Machine Learning and Data Science allows us to look at problem-solving in a different perspective. Although one limitation I see going through the entire course is data. If the data is erroneous or lack therof, it will impact every analysis every modeling we build.
+
+Machine Learning as a tool and technique will take us to great heights in data-driven decision making. 
+
+This report is a culmination of the possibilities Data Science can do for us. From building businesses to solving medical impossibilities, we are in the age where data is power. And Data Science is where it all begin.
+
+
+
+
+
+
+
